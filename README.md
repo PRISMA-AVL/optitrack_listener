@@ -7,4 +7,4 @@ This package works with natnet_ros_cpp (add_link).
 It is needed to convert the actual streamed pose from the optitrack frame to the ENU frame. 
 The converted pose is then published in the "/mavros/vision_pose/pose" needed by mavros to allow switching to position flight mode.
 
-###NB: The actual transformation is considered with the fixed frame defined by the optitrack calibration "CAL 2024-01-18 14.53.21 (3DErr 0.743 mm)"
+### NB: The actual transformation is considered with the fixed frame defined by the optitrack calibration "CAL 2024-01-18 14.53.21 (3DErr 0.743 mm)"
