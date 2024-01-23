@@ -105,6 +105,8 @@ void LISTENER::repub() {
 	ros::Rate r(_rate);
 	
     while( ros::ok() ) {
+		msg.header.frame_id = "map";
+		msg.header.stamp = ros::Time::now();
         msg.pose.position.x = _pos_enu(0);
         msg.pose.position.y = _pos_enu(1);
         msg.pose.position.z = _pos_enu(2);
