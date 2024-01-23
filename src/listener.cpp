@@ -80,19 +80,24 @@ void LISTENER::loop() {
 
 	ros::Rate r(_rate);
 	Eigen::Matrix4d T_pose, T_ENU;
-    Eigen::Matrix3d R_pose;
+    Eigen::Matrix3d R_pose,R_o_enu;
 	Eigen::Matrix3d R_ENU;
+	Eigen::Vector3d p_pose;
+	R_o_enu << -1,0,0,0,0,1,0,1,0;
 	while ( ros::ok() ) {
         R_pose = utilities::QuatToMat(Eigen::Vector4d(_pose_fb.pose.orientation.w,_pose_fb.pose.orientation.x,_pose_fb.pose.orientation.y,_pose_fb.pose.orientation.z));
+        p_pose << _pose_fb.pose.position.x,_pose_fb.pose.position.y,_pose_fb.pose.position.z;
         T_pose <<   R_pose(0,0),R_pose(0,1),R_pose(0,2),_pose_fb.pose.position.x,
                     R_pose(1,0),R_pose(1,1),R_pose(1,2),_pose_fb.pose.position.y,
                     R_pose(2,0),R_pose(2,1),R_pose(2,2),_pose_fb.pose.position.z,
                     0,0,0,1;
         T_ENU = _T_trans_inv*T_pose;
+        //_pos_enu = R_o_enu*p_pose;
         _pos_enu << T_ENU(0,3),T_ENU(1,3),T_ENU(2,3);
-		R_ENU << T_ENU(0,0), T_ENU(0,1), T_ENU(0,2),
-				 T_ENU(1,0), T_ENU(1,1), T_ENU(1,2),
-				 T_ENU(2,0), T_ENU(2,1), T_ENU(2,2);
+		//R_ENU << T_ENU(0,0), T_ENU(0,1), T_ENU(0,2),
+		//		 T_ENU(1,0), T_ENU(1,1), T_ENU(1,2),
+		//		 T_ENU(2,0), T_ENU(2,1), T_ENU(2,2);
+		R_ENU = R_o_enu*R_pose*(_T_trans.block<3,3>(0,0));
 		_rpy_enu = utilities::MatToRpy(R_ENU);
         _quat_enu = utilities::rot2quat(R_ENU);
         r.sleep();
