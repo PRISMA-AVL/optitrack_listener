@@ -93,7 +93,9 @@ void LISTENER::loop() {
                     R_pose(2,0),R_pose(2,1),R_pose(2,2),_pose_fb.pose.position.z,
                     0,0,0,1;
         T_ENU = _T_trans_inv*T_pose;
-        _pos_enu << T_ENU(0,3),T_ENU(1,3),T_ENU(2,3);
+		p_pose << _pose_fb.pose.position.x,_pose_fb.pose.position.y,_pose_fb.pose.position.z;
+        // _pos_enu << T_ENU(0,3),T_ENU(1,3),T_ENU(2,3);
+		_pos_enu = p_pose;
 		R_ENU = R_o_enu*R_pose*(_T_trans.block<3,3>(0,0));
 		// R_ENU << T_ENU(0,0), T_ENU(0,1), T_ENU(0,2),
 		// 		 T_ENU(1,0), T_ENU(1,1), T_ENU(1,2),
