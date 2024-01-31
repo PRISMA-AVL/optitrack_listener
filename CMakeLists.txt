@@ -126,6 +126,9 @@ include_directories(
 add_executable(listener src/listener.cpp)
 target_link_libraries(listener ${catkin_LIBRARIES} )
 
+add_executable(bb_creator src/dyn_map.cpp)
+target_link_libraries( bb_creator ${catkin_LIBRARIES} )
+
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/optitrack_listener.cpp

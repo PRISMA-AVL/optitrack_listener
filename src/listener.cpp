@@ -2,6 +2,7 @@
 #include "ros/ros.h"
 #include "boost/thread.hpp"
 #include "geometry_msgs/PoseStamped.h"
+#include "nav_msgs/Odometry.h"
 #include "std_srvs/Empty.h"
 
 // Custom Library
@@ -23,6 +24,7 @@ class LISTENER {
 	public:
 		LISTENER();
 		void loop();
+		void vel_comp();
 
 		// Publishers fun
 		void repub();
@@ -37,13 +39,14 @@ class LISTENER {
 		// ROS variables
 		ros::NodeHandle _nh;
 		ros::Publisher  _vision_pose_repub;
+		ros::Publisher _odom_pub;
 		ros::Subscriber _optitrack_sub;
 
 		geometry_msgs::PoseStamped _pose_fb;
 		int _rate;
 		// Interaction forces
 		Eigen::Matrix4d _T_trans, _T_trans_inv;
-        Eigen::Vector3d _pos_enu, _rpy_enu;
+        Eigen::Vector3d _pos_enu, _rpy_enu, _lin_vel;
         Eigen::Vector4d _quat_enu;
 };
 
@@ -51,9 +54,11 @@ class LISTENER {
 LISTENER::LISTENER() {
 
 	// ROS publishers
-	_vision_pose_repub   = _nh.advertise< geometry_msgs::PoseStamped >("/mavros/vision_pose/pose", 0);
+	_vision_pose_repub   = _nh.advertise< geometry_msgs::PoseStamped >("/obstacle_1/pose", 0);
+	_odom_pub = _nh.advertise<nav_msgs::Odometry>( "/obstacle_1/odom", 0);
 	// ROS subscribers
-	_optitrack_sub  = _nh.subscribe("/natnet_ros/Robot_1/pose", 1, &LISTENER::opt_track_cb, this);
+	_optitrack_sub  = _nh.subscribe("/natnet_ros/body_1/pose", 1, &LISTENER::opt_track_cb, this);
+	
     	
     _rate = 120;
 
@@ -82,10 +87,17 @@ void LISTENER::loop() {
 	Eigen::Matrix4d T_pose, T_ENU;
     Eigen::Matrix3d R_pose, R_o_enu;
 	Eigen::Matrix3d R_ENU;
+	Eigen::Matrix3d R_z, R_x;
 	Eigen::Vector3d p_pose;
 	R_o_enu << -1,0,0,
 				0,0,1,
 				0,1,0;
+	R_z << 0.0, 1.0, 0.0,
+			-1.0, 0.0, 0.0,
+			0.0, 0.0, 1.0;
+	R_x << 1.0, 0.0, 0.0,
+			0.0, 0.0, -1.0,
+			0.0, 1.0, 0.0;
 	while ( ros::ok() ) {
         R_pose = utilities::QuatToMat(Eigen::Vector4d(_pose_fb.pose.orientation.w,_pose_fb.pose.orientation.x,_pose_fb.pose.orientation.y,_pose_fb.pose.orientation.z));
         T_pose <<   R_pose(0,0),R_pose(0,1),R_pose(0,2),_pose_fb.pose.position.x,
@@ -95,14 +107,50 @@ void LISTENER::loop() {
         T_ENU = _T_trans_inv*T_pose;
 		p_pose << _pose_fb.pose.position.x,_pose_fb.pose.position.y,_pose_fb.pose.position.z;
         // _pos_enu << T_ENU(0,3),T_ENU(1,3),T_ENU(2,3);
-		_pos_enu = p_pose;
-		R_ENU = R_o_enu*R_pose*(_T_trans.block<3,3>(0,0));
+		_pos_enu = R_x*p_pose;
+		R_ENU = R_z*R_o_enu*R_pose*(_T_trans.block<3,3>(0,0));
 		// R_ENU << T_ENU(0,0), T_ENU(0,1), T_ENU(0,2),
 		// 		 T_ENU(1,0), T_ENU(1,1), T_ENU(1,2),
 		// 		 T_ENU(2,0), T_ENU(2,1), T_ENU(2,2);
 		_rpy_enu = utilities::MatToRpy(R_ENU);
         _quat_enu = utilities::rot2quat(R_ENU);
         r.sleep();
+	}
+}
+
+void LISTENER::vel_comp() {
+	int rate = 10;
+	ros::Rate r(rate);
+	Eigen::Vector3d _old_pos;
+	_old_pos = _pos_enu;
+	_lin_vel.setZero();
+	nav_msgs::Odometry msg;
+
+	while( ros::ok() ) {
+
+		_lin_vel = (_pos_enu - _old_pos)/(2*(0.1));
+
+		_old_pos = _pos_enu;
+		// cout<<"Velocity: "<<_lin_vel[0]<<", "<<_lin_vel[1]<<", "<<_lin_vel[2]<<"\n";
+		msg.header.frame_id = "map";
+		msg.header.stamp = ros::Time::now();
+		msg.pose.pose.position.x = _pos_enu(0);
+		msg.pose.pose.position.y = _pos_enu(1);
+		msg.pose.pose.position.z = _pos_enu(2);
+		msg.pose.pose.orientation.w = _quat_enu(0);
+		msg.pose.pose.orientation.x = _quat_enu(1);
+		msg.pose.pose.orientation.y = _quat_enu(2);
+		msg.pose.pose.orientation.z = _quat_enu(3);
+		msg.twist.twist.linear.x = _lin_vel[0];
+		msg.twist.twist.linear.y = _lin_vel[1];
+		msg.twist.twist.linear.z = _lin_vel[2];
+		msg.twist.twist.angular.x = 0.0;
+		msg.twist.twist.angular.y = 0.0;
+		msg.twist.twist.angular.z = 0.0;
+		_odom_pub.publish(msg);
+		r.sleep();
+		
+
 	}
 }
 
@@ -132,6 +180,7 @@ void LISTENER::repub() {
 void LISTENER::run() {
 	boost::thread loop_t( &LISTENER::loop, this );
 	boost::thread republish_t( &LISTENER::repub, this );
+	boost::thread vel_comp_t( &LISTENER::vel_comp, this );
 
 	ros::spin();
 }
