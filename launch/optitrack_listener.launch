@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+
+<launch>
+	<node pkg="optitrack_listener" name="listener" type="listener" output="screen">
+		
+        <param name="optitrack_topic" type="string" value="/natnet_ros/Robot_1/pose"/>
+		<param name="mavros_topic" type="string" value="/mavros/vision_pose/pose"/>
+		<!--
+		<param name="output_ref_frame" type="string" value="ned" />
+		-->
+		<param name="output_reference_frame" type="string" value="enu" />
+
+	</node>
+</launch>
