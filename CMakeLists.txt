@@ -31,7 +31,7 @@ find_package(mocap_optitrack_interfaces REQUIRED)
 # Setup targets #
 #################
  
-set(opt_msgs "/home/dev/ndt2_ws/src/ros2-mocap_optitrack")
+set(opt_msgs "/home/dev/px4_ws/src/ros2-mocap_optitrack")
 
 include_directories(
 # include

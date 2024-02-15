@@ -1,6 +1,5 @@
-#include <px4_msgs/msg/vehicle_visual_odometry.hpp>
+#include <px4_msgs/msg/vehicle_odometry.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
-#include <px4_msgs/msg/timesync.hpp>
 #include "mocap_optitrack_interfaces/msg/rigid_body_array.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include "utils.h"
@@ -35,15 +34,12 @@ public:
 	
 private:
 
-	rclcpp::Publisher<px4_msgs::msg::VehicleVisualOdometry>::SharedPtr _odom_publisher;
-	rclcpp::Subscription<px4_msgs::msg::Timesync>::SharedPtr _timesync_sub;
+	rclcpp::Publisher<px4_msgs::msg::VehicleOdometry>::SharedPtr _odom_publisher;
 	rclcpp::Subscription<mocap_optitrack_interfaces::msg::RigidBodyArray>::SharedPtr _optitrack_sub;
-
-	std::atomic<uint64_t> _timesync;   //!< common synced timestamped
 
 	std::atomic<uint64_t> _timestamp_sample;
 	
-	VehicleVisualOdometry _odometry{};
+	VehicleOdometry _odometry{};
 
     //New variables
     Eigen::Vector3d _p_opt;
@@ -71,13 +67,7 @@ OptitrackListener::OptitrackListener(): Node("optitrack_listener"){
     rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
 	auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5), qos_profile);
     
-	_timesync_sub = this->create_subscription<px4_msgs::msg::Timesync>("/fmu/timesync/out",qos,
-		[this](const px4_msgs::msg::Timesync::UniquePtr msg) {
-			_timesync.store(msg->timestamp);
-		}
-	);
-
-    _optitrack_sub = this->create_subscription<mocap_optitrack_interfaces::msg::RigidBodyArray>(_input_topic.c_str(),qos,
+	_optitrack_sub = this->create_subscription<mocap_optitrack_interfaces::msg::RigidBodyArray>(_input_topic.c_str(),qos,
 		[this](const mocap_optitrack_interfaces::msg::RigidBodyArray::UniquePtr pose_opt) {
 			_p_opt << pose_opt->rigid_bodies[0].pose_stamped.pose.position.x, pose_opt->rigid_bodies[0].pose_stamped.pose.position.y, pose_opt->rigid_bodies[0].pose_stamped.pose.position.z;
             _q_opt << pose_opt->rigid_bodies[0].pose_stamped.pose.orientation.w, pose_opt->rigid_bodies[0].pose_stamped.pose.orientation.x, pose_opt->rigid_bodies[0].pose_stamped.pose.orientation.y, pose_opt->rigid_bodies[0].pose_stamped.pose.orientation.z; 
@@ -85,7 +75,7 @@ OptitrackListener::OptitrackListener(): Node("optitrack_listener"){
 	);
 
 	// Publishers
-	_odom_publisher = this->create_publisher<px4_msgs::msg::VehicleVisualOdometry>("/fmu/vehicle_visual_odometry/in", 1);
+	_odom_publisher = this->create_publisher<px4_msgs::msg::VehicleOdometry>("/fmu/vehicle_odometry/in", 1);
   	
   	_timestamp_sample = 0;
 
@@ -112,17 +102,17 @@ void OptitrackListener::timerCallback() {
         Eigen::Matrix3d R_opt2_ned = R_o_ned*R_opt*R_o.transpose();
         Eigen::Vector4d q_opt2_ned = utilities::rot2quat(R_opt2_ned);
 
-        _odometry.local_frame = 0; //NED
-        _odometry.x = p_opt2_ned[0];
-        _odometry.y = p_opt2_ned[1];
-        _odometry.z = p_opt2_ned[2];
+        _odometry.pose_frame = 0; //NED
+        _odometry.position[0] = p_opt2_ned[0];
+        _odometry.position[1] = p_opt2_ned[1];
+        _odometry.position[2] = p_opt2_ned[2];
 
         _odometry.q = {float(q_opt2_ned[0]), float(q_opt2_ned[1]), float(q_opt2_ned[2]), float(q_opt2_ned[3])};
     
         _timestamp_sample++;
         
-        _odometry.timestamp = _timesync.load();
-        _odometry.timestamp_sample = _timesync.load();
+        _odometry.timestamp =  std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()).time_since_epoch().count();
+        _odometry.timestamp_sample =  std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()).time_since_epoch().count();
                     
         //std::cout << "P: " << position_.t() << std::endl;
     
