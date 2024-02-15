@@ -1,6 +1,7 @@
 #include <px4_msgs/msg/vehicle_visual_odometry.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <px4_msgs/msg/timesync.hpp>
+#include "mocap_optitrack_interfaces/msg/rigid_body_array.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include "utils.h"
 
@@ -27,16 +28,16 @@ class OptitrackListener : public rclcpp::Node {
 public:
 	
     OptitrackListener();
+    void timerCallback();
+    rclcpp::TimerBase::SharedPtr timer_;
+
+
 	
 private:
 
-	void Publisher();
-
-	rclcpp::TimerBase::SharedPtr timer_;
-
 	rclcpp::Publisher<px4_msgs::msg::VehicleVisualOdometry>::SharedPtr _odom_publisher;
 	rclcpp::Subscription<px4_msgs::msg::Timesync>::SharedPtr _timesync_sub;
-	rclcpp::Subscription<geometry_msgs::msg::PoseStamped >::SharedPtr _optitrack_sub;
+	rclcpp::Subscription<mocap_optitrack_interfaces::msg::RigidBodyArray>::SharedPtr _optitrack_sub;
 
 	std::atomic<uint64_t> _timesync;   //!< common synced timestamped
 
@@ -58,20 +59,28 @@ private:
 
 OptitrackListener::OptitrackListener(): Node("optitrack_listener"){
     
-    declare_parameter("topic_name",  "/natnet_ros/Robot_1/pose");
+    // declare_parameter("topic_name",  "/natnet_ros/Robot_1/pose");
+    declare_parameter("topic_name",  "/avl_rigid_body");
     auto input = get_parameter("topic_name").as_string();
     _input_topic = input;
 
-	_timesync_sub = this->create_subscription<px4_msgs::msg::Timesync>("/fmu/timesync/out",10,
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(4),
+        std::bind(&OptitrackListener::timerCallback, this));
+
+    rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
+	auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5), qos_profile);
+    
+	_timesync_sub = this->create_subscription<px4_msgs::msg::Timesync>("/fmu/timesync/out",qos,
 		[this](const px4_msgs::msg::Timesync::UniquePtr msg) {
 			_timesync.store(msg->timestamp);
 		}
 	);
 
-    _optitrack_sub = this->create_subscription<geometry_msgs::msg::PoseStamped>(_input_topic.c_str(),10,
-		[this](const geometry_msgs::msg::PoseStamped::UniquePtr pose_opt) {
-			_p_opt << pose_opt->pose.position.x, pose_opt->pose.position.y, pose_opt->pose.position.z;
-            _q_opt << pose_opt->pose.orientation.w, pose_opt->pose.orientation.x, pose_opt->pose.orientation.y, pose_opt->pose.orientation.z; 
+    _optitrack_sub = this->create_subscription<mocap_optitrack_interfaces::msg::RigidBodyArray>(_input_topic.c_str(),qos,
+		[this](const mocap_optitrack_interfaces::msg::RigidBodyArray::UniquePtr pose_opt) {
+			_p_opt << pose_opt->rigid_bodies[0].pose_stamped.pose.position.x, pose_opt->rigid_bodies[0].pose_stamped.pose.position.y, pose_opt->rigid_bodies[0].pose_stamped.pose.position.z;
+            _q_opt << pose_opt->rigid_bodies[0].pose_stamped.pose.orientation.w, pose_opt->rigid_bodies[0].pose_stamped.pose.orientation.x, pose_opt->rigid_bodies[0].pose_stamped.pose.orientation.y, pose_opt->rigid_bodies[0].pose_stamped.pose.orientation.z; 
 		}
 	);
 
@@ -80,65 +89,55 @@ OptitrackListener::OptitrackListener(): Node("optitrack_listener"){
   	
   	_timestamp_sample = 0;
 
-	Publisher();
 }
 
-void OptitrackListener::Publisher(){
-  	
-    auto timer_callback = [this]() -> void {
-        Eigen::Matrix3d R_o;
+void OptitrackListener::timerCallback() {
+    
+    Eigen::Matrix3d R_o;
 
-        R_o << 0, 0, 1, 
-                1, 0, 0,
-                0, 1, 0;
+    R_o << 0, 0, 1, 
+            1, 0, 0,
+            0, 1, 0;
 
-        if(rclcpp::ok()){
-                
-            Matrix3d R_opt = utilities::QuatToMat( _q_opt );
-
-            Eigen::Matrix3d R_o_ned;
-            R_o_ned << 0,  0, 1,
-                        -1,  0, 0,
-                        0, -1, 0;
-            //Rotate optitrack data
-            Eigen::Vector3d p_opt2_ned = R_o_ned*_p_opt;
-            Eigen::Matrix3d R_opt2_ned = R_o_ned*R_opt*R_o.transpose();
-            Eigen::Vector4d q_opt2_ned = utilities::rot2quat(R_opt2_ned);
-
-            _odometry.local_frame = 0; //NED
-            _odometry.x = p_opt2_ned[0];
-            _odometry.y = p_opt2_ned[1];
-            _odometry.z = p_opt2_ned[2];
-
-            _odometry.q = {float(q_opt2_ned[0]), float(q_opt2_ned[1]), float(q_opt2_ned[2]), float(q_opt2_ned[3])};
-        
-            _timestamp_sample++;
+    if(rclcpp::ok()){
             
-            _odometry.timestamp = _timesync.load();
-            _odometry.timestamp_sample = _timesync.load();
-                        
-            //std::cout << "P: " << position_.t() << std::endl;
+        Matrix3d R_opt = utilities::QuatToMat( _q_opt );
+
+        Eigen::Matrix3d R_o_ned;
+        R_o_ned << 0,  0, 1,
+                    -1,  0, 0,
+                    0, -1, 0;
+        //Rotate optitrack data
+        Eigen::Vector3d p_opt2_ned = R_o_ned*_p_opt;
+        Eigen::Matrix3d R_opt2_ned = R_o_ned*R_opt*R_o.transpose();
+        Eigen::Vector4d q_opt2_ned = utilities::rot2quat(R_opt2_ned);
+
+        _odometry.local_frame = 0; //NED
+        _odometry.x = p_opt2_ned[0];
+        _odometry.y = p_opt2_ned[1];
+        _odometry.z = p_opt2_ned[2];
+
+        _odometry.q = {float(q_opt2_ned[0]), float(q_opt2_ned[1]), float(q_opt2_ned[2]), float(q_opt2_ned[3])};
+    
+        _timestamp_sample++;
         
-            _odom_publisher->publish(_odometry);
-        }
-
-    };
-    timer_ = this->create_wall_timer(10ms, timer_callback); // 100 Hz
-	
+        _odometry.timestamp = _timesync.load();
+        _odometry.timestamp_sample = _timesync.load();
+                    
+        //std::cout << "P: " << position_.t() << std::endl;
+    
+        _odom_publisher->publish(_odometry);
+    }
 }
 
-
-int main(int argc, char* argv[]) {
-	std::cout << "Starting optitrack_listener node..." << std::endl;
-	setvbuf(stdout, NULL, _IONBF, BUFSIZ);
-	rclcpp::init(argc, argv);
-
-	rclcpp::spin(std::make_shared<OptitrackListener>());
-
-	rclcpp::shutdown();
-	return 0;
+int main(int argc, char **argv) {
+    std::cout << "Starting optitrack_listener node..." << std::endl;
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<OptitrackListener>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
 }
-
 
 
 

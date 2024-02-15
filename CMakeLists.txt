@@ -25,11 +25,21 @@ find_package(geometry_msgs REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(mocap_optitrack_interfaces REQUIRED)
 
 #################
 # Setup targets #
 #################
+ 
+set(opt_msgs "/home/dev/ndt2_ws/src/ros2-mocap_optitrack")
 
+include_directories(
+# include
+  ${catkin_INCLUDE_DIRS}
+	${opt_msgs}/
+  /usr/include/eigen3
+
+)
 
 add_executable(optitrack_listener src/optitrack_listener.cpp)
 target_include_directories(optitrack_listener PUBLIC
@@ -41,6 +51,7 @@ ament_target_dependencies(optitrack_listener
   px4_msgs
   Eigen3
   geometry_msgs
+  mocap_optitrack_interfaces
 )
 
 install(TARGETS optitrack_listener
@@ -53,7 +64,8 @@ DESTINATION lib/${PROJECT_NAME})
 # Export information to downstream packages
 ament_export_dependencies(ament_cmake rclcpp rosidl_default_runtime eigen3_cmake_module Eigen3 px4_msgs geometry_msgs sensor_msgs)
 
-ament_export_include_directories(include)
+ament_export_include_directories(include
+)
 
 # Install header files
 install(DIRECTORY include/${PROJECT_NAME}/ DESTINATION include/${PROJECT_NAME})
