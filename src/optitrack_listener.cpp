@@ -75,7 +75,7 @@ OptitrackListener::OptitrackListener(): Node("optitrack_listener"){
 	);
 
 	// Publishers
-	_odom_publisher = this->create_publisher<px4_msgs::msg::VehicleOdometry>("/fmu/vehicle_odometry/in", 1);
+	_odom_publisher = this->create_publisher<px4_msgs::msg::VehicleOdometry>("/fmu/in/vehicle_visual_odometry", 1);
   	
   	_timestamp_sample = 0;
 
