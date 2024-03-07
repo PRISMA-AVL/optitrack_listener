@@ -9,4 +9,4 @@ The converted pose is then published in the "/mavros/vision_pose/pose" needed by
 
 ### NB: The actual transformation considers the fixed frame defined by the optitrack calibration "CAL 2024-01-18 14.53.21 (3DErr 0.743 mm)"
 
-If you need a fake optitrack listener for the gazebo simulation with PX4 in ROS1 check this repo: [PRISMA_Lab_optitrack_listener]([https://github.com/PRISMA-AVL/natnet_ros_cpp.git](https://github.com/jocacace/optitrack_listener.git)https://github.com/jocacace/optitrack_listener.git)
+If you need a fake optitrack listener for the gazebo simulation with PX4 in ROS1 check this repo: [PRISMA_Lab_optitrack_listener](https://github.com/jocacace/optitrack_listener.git)
